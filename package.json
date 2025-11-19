@@ -1,0 +1,9 @@
+{
+  "name": "link-highlighter",
+  "version": "1.0.0",
+  "description": "Browser extension that highlights visited links",
+  "scripts": {
+    "build": "node scripts/build.js",
+    "dev": "webpack --watch"
+  }
+}
