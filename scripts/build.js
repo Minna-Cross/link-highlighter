@@ -1,12 +1,35 @@
-// Script to zip extension for store submission
 const fs = require('fs');
+const path = require('path');
 const archiver = require('archiver');
 
-// Zip src folder for Chrome Web Store
-const output = fs.createWriteStream('dist/chrome-extension.zip');
-const archive = archiver('zip');
+require('./generate-icons');
+
+const distDir = path.join(__dirname, '..', 'dist');
+if (!fs.existsSync(distDir)) {
+  fs.mkdirSync(distDir, { recursive: true });
+}
+
+const outputPath = path.join(distDir, 'link-highlighter.zip');
+const output = fs.createWriteStream(outputPath);
+const archive = archiver('zip', { zlib: { level: 9 } });
+
+output.on('close', () => {
+  console.log(`Extension zipped successfully to ${outputPath} (${archive.pointer()} bytes).`);
+});
+
+archive.on('warning', (err) => {
+  if (err.code === 'ENOENT') {
+    console.warn(err);
+  } else {
+    throw err;
+  }
+});
+
+archive.on('error', (err) => {
+  throw err;
+});
 
 archive.pipe(output);
-archive.directory('src/', false);
+archive.file(path.join(__dirname, '..', 'manifest.json'), { name: 'manifest.json' });
+archive.directory(path.join(__dirname, '..', 'src'), 'src');
 archive.finalize();
-console.log('Extension zipped successfully to dist/chrome-extension.zip');

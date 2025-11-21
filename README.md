@@ -16,26 +16,37 @@ A browser extension that highlights visited links with different colors based on
 ## 🚀 Installation
 
 ### Development Setup
-1. Clone this repository
-2. Load the extension in Chrome/Edge/Firefox (see [docs/development.md](docs/installation.md))
-3. Start developing!
+1. Clone this repository.
+2. Run `npm install` (first time only).
+3. Generate the icons (first time only): `npm run generate:icons`.
+4. In your browser's Extensions page, enable **Developer Mode**.
+5. Click **Load unpacked** and select the repository root (the folder containing `manifest.json`).
+   - Chrome/Edge will automatically find the scripts inside the `src/` folder along with the generated icons.
+6. Start developing!
 
 ### Quick Start
 ```bash
 git clone https://github.com/yourusername/link-highlighter.git
 cd link-highlighter
-# Load extension in browser developer mode
+# Load extension in browser developer mode by selecting this folder
+```
+
+### Packaging for the Web Store
+```bash
+npm run build
+# Produces dist/link-highlighter.zip containing manifest.json and the src/ directory
+# Icons are generated automatically during the build if they are missing
 ```
 
 ## 📁 Project Structure
 ```bash 
 link-highlighter/
+├── manifest.json               # Extension configuration
 ├── src/                        # Source code
-│   ├── manifest.json           # Extension configuration
 │   ├── content.js              # Link highlighting logic (main feature)
 │   ├── popup.html              # Popup interface
 │   ├── popup.js                # Popup functionality
-│   └── icons/                  # Extension icons
+│   └── icons/                  # Extension icons (generated)
 │       ├── icon16.png
 │       ├── icon48.png
 │       └── icon128.png
