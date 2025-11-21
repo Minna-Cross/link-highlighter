@@ -230,7 +230,11 @@ class LinkHighlighter {
       enabled: this.enabled,
       processingDelay: this.processingDelay,
       maxLinksPerBatch: this.maxLinksPerBatch,
-      throttleDelay: this.throttleDelay
+      throttleDelay: this.throttleDelay,
+      throttleDynamicContent: this.config.throttleDynamicContent,
+      throttledUpdates: this.performanceMetrics.throttledUpdates,
+      lastProcessTime: this.performanceMetrics.lastProcessTime,
+      averageProcessingTime: this.performanceMetrics.averageProcessingTime
     };
   }
 
@@ -339,7 +343,12 @@ class LinkHighlighter {
     
     try {
       const url = new URL(href, window.location.href);
-      const protocol = url.protocol.toLowerCase();
+      let protocol = url.protocol.toLowerCase();
+
+      // Fallback: treat missing protocol as the current page protocol
+      if (!protocol) {
+        protocol = window.location.protocol;
+      }
       
       // Enhanced protocol validation with security checks
       const skipProtocols = ['mailto:', 'tel:', 'ftp:', 'data:', 'blob:', 'about:'];
@@ -352,8 +361,7 @@ class LinkHighlighter {
         return false;
       }
       
-      return this.config.protocols.includes(protocol) || 
-             (protocol === window.location.protocol && !protocol);
+      return this.config.protocols.includes(protocol);
     } catch (error) {
       return false;
     }
@@ -750,9 +758,11 @@ class LinkHighlighter {
 // Enhanced initialization with comprehensive error handling
 function initializeLinkHighlighter() {
   const startTime = performance.now();
-  
+
   let highlighter = null;
-  
+  let teardownSPASupport = () => {};
+  let cleanedUp = false;
+
   try {
     // Check if we're in a suitable environment
     if (typeof chrome === 'undefined' || !chrome.runtime || !chrome.storage) {
@@ -767,6 +777,12 @@ function initializeLinkHighlighter() {
     
     // Comprehensive cleanup
     const cleanup = () => {
+      if (cleanedUp) return;
+      cleanedUp = true;
+
+      teardownSPASupport();
+      teardownSPASupport = () => {};
+
       if (highlighter) {
         highlighter.destroy();
         highlighter = null;
@@ -777,8 +793,8 @@ function initializeLinkHighlighter() {
     window.addEventListener('pagehide', cleanup);
     
     // Enhanced SPA support
-    setupSPASupport(cleanup);
-    
+    teardownSPASupport = setupSPASupport(cleanup);
+
     return highlighter;
   } catch (error) {
     console.error('Link Highlighter: Failed to initialize', error);
@@ -791,44 +807,60 @@ function setupSPASupport(cleanup) {
   // Modern SPA frameworks
   const originalPushState = history.pushState;
   const originalReplaceState = history.replaceState;
-  
-  history.pushState = function(...args) {
+  let spaObserver = null;
+
+  const spaCleanup = () => {
     cleanup();
+  };
+
+  history.pushState = function(...args) {
+    spaCleanup();
     return originalPushState.apply(this, args);
   };
-  
+
   history.replaceState = function(...args) {
-    cleanup();
+    spaCleanup();
     return originalReplaceState.apply(this, args);
   };
-  
+
   // Framework-specific support
-  document.addEventListener('turbolinks:load', cleanup);
-  window.addEventListener('pjax:end', cleanup);
-  
+  document.addEventListener('turbolinks:load', spaCleanup);
+  window.addEventListener('pjax:end', spaCleanup);
+
   // MutationObserver for SPA content replacement
-  const spaObserver = new MutationObserver((mutations) => {
+  spaObserver = new MutationObserver((mutations) => {
     for (const mutation of mutations) {
       if (mutation.type === 'childList') {
         for (const node of mutation.addedNodes) {
           if (node.nodeType === 1 && (
-            node.id === 'root' || 
+            node.id === 'root' ||
             node.getAttribute('data-reactroot') ||
             node.getAttribute('ng-app') ||
             node.classList.contains('vue-root')
           )) {
-            setTimeout(cleanup, 100);
+            setTimeout(spaCleanup, 100);
             break;
           }
         }
       }
     }
   });
-  
+
   spaObserver.observe(document.body, {
     childList: true,
     subtree: true
   });
+
+  return function teardownSPASupport() {
+    history.pushState = originalPushState;
+    history.replaceState = originalReplaceState;
+    document.removeEventListener('turbolinks:load', spaCleanup);
+    window.removeEventListener('pjax:end', spaCleanup);
+    if (spaObserver) {
+      spaObserver.disconnect();
+      spaObserver = null;
+    }
+  };
 }
 
 // Robust initialization that handles various page states

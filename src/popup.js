@@ -6,6 +6,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   const clearCacheBtn = document.getElementById('clearCacheBtn');
   const advancedToggle = document.getElementById('advancedToggle');
   const advancedSettings = document.getElementById('advancedSettings');
+
+  function readPositiveInt(inputId, fallback, label, min = 1) {
+    const rawValue = document.getElementById(inputId).value.trim();
+    if (rawValue === '') return { value: fallback };
+
+    const parsed = parseInt(rawValue, 10);
+    if (!Number.isFinite(parsed) || parsed < min) {
+      return { error: `${label} must be at least ${min}` };
+    }
+
+    return { value: parsed };
+  }
   
   try {
     // Load current settings
@@ -89,11 +101,20 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Update performance settings
   document.getElementById('applySettings').addEventListener('click', async () => {
     try {
+      const processingDelay = readPositiveInt('processingDelay', 50, 'Processing delay');
+      if (processingDelay.error) return showStatus(processingDelay.error, 'error');
+
+      const maxLinksPerBatch = readPositiveInt('maxLinksPerBatch', 5, 'Batch size');
+      if (maxLinksPerBatch.error) return showStatus(maxLinksPerBatch.error, 'error');
+
+      const throttleDelay = readPositiveInt('throttleDelay', 500, 'Throttle delay', 50);
+      if (throttleDelay.error) return showStatus(throttleDelay.error, 'error');
+
       const settings = {
-        processingDelay: parseInt(document.getElementById('processingDelay').value) || 50,
-        maxLinksPerBatch: parseInt(document.getElementById('maxLinksPerBatch').value) || 5,
+        processingDelay: processingDelay.value,
+        maxLinksPerBatch: maxLinksPerBatch.value,
         throttleDynamicContent: document.getElementById('throttleDynamicContent').checked,
-        throttleDelay: parseInt(document.getElementById('throttleDelay').value) || 500
+        throttleDelay: throttleDelay.value
       };
 
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -132,7 +153,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   function updateStatsDisplay(data) {
     const statsDiv = document.getElementById('stats');
     if (!statsDiv) return;
-    
+
     if (data.stats) {
       statsDiv.innerHTML = `
         <div style="font-size: 12px; color: #666; margin-top: 10px;">
@@ -140,7 +161,11 @@ document.addEventListener('DOMContentLoaded', async () => {
           Cache: ${data.stats.cacheSize} URLs<br>
           Processed: ${data.stats.processedLinks} links<br>
           Delay: ${data.stats.processingDelay}ms<br>
-          Batch: ${data.stats.maxLinksPerBatch} links
+          Batch: ${data.stats.maxLinksPerBatch} links<br>
+          Throttle: ${data.stats.throttleDynamicContent ? 'on' : 'off'} (${data.stats.throttleDelay}ms)<br>
+          Throttled updates: ${data.stats.throttledUpdates}<br>
+          Last batch: ${Math.round(data.stats.lastProcessTime || 0)}ms<br>
+          Avg batch: ${Math.round(data.stats.averageProcessingTime || 0)}ms
         </div>
       `;
     }
