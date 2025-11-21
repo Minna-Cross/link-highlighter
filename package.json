@@ -4,6 +4,10 @@
   "description": "Browser extension that highlights visited links",
   "scripts": {
     "build": "node scripts/build.js",
+    "generate:icons": "node scripts/generate-icons.js",
     "dev": "webpack --watch"
+  },
+  "devDependencies": {
+    "archiver": "^5.3.2"
   }
 }
